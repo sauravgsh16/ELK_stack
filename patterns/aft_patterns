@@ -1,0 +1,3 @@
+TESTNAME [a-zA-Z0-9\._]*
+MODULENAME [a-zA-Z\._]+
+OTHERDATA [a-zA-Z\\:\.0-9\-]*%{SPACE}UserWarning%{GREEDYDATA}
