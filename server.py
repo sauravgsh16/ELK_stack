@@ -13,6 +13,7 @@ class ConsoleLogBase(object):
 
     def __init__(self):
         _buildNo = os.environ['BUILD_NUMBER']
+        print _buildNo
         self.host = socket.gethostname()
         self.url = self.BASE_URL.format(BUILDNO=_buildNo)
         self.pageContent = self._get_page_content()
@@ -43,19 +44,16 @@ class ConsoleLogBase(object):
 
     def send_data_to_logstash(self):
         ''' send_data_to_logstash '''
-        count = 0
         consoleDataList = self.soup.get_text()
-        data = consoleDataList.split('\n')
+        data = consoleDataList.split("\n")
         for line in data:
             try:
                 sock = self._initialize_socket()
                 sock.send(b'{LINE}'.format(LINE=line))
-                count += 1
             except UnicodeEncodeError as e:
                 print line, e
             finally:
                 sock.close()
-        print 'Done, send %d lines' % count
 
 if __name__ == '__main__':
     c = ConsoleLogBase()

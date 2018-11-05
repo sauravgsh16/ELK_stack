@@ -1,0 +1,115 @@
+#!groovy
+
+def executeScript = """
+import os
+import requests
+import socket
+import time
+from bs4 import BeautifulSoup
+
+
+class InvalidStatusCodeException(Exception):
+    pass
+
+
+class ConsoleLogBase(object):
+    ''' ConsoleLog '''
+    PORT = 9000
+    BASE_URL = 'https://ci-gsix.isg.deere.com/job/systest-pipeline.integration/4155/consoleFull'
+
+    def __init__(self):
+        self._buildNo = os.environ['BUILD_NUMBER']
+        self.host = socket.gethostname()
+        self.url = self.BASE_URL
+        self.pageContent = self._get_page_content()
+        self.soup = None
+        self.initialize()
+
+    def initialize(self):
+        ''' initialize '''
+        self.soup = self._initialize_soup()
+
+    def _get_page_content(self):
+        ''' _get_page_content '''
+        res = requests.get(self.url)
+        if res.status_code == 200:
+            return res.content
+        raise InvalidStatusCodeException(
+            'Status code: %s for %s "INVALID"' % (res.status_code, self.url))
+    
+    def _initialize_soup(self):
+        ''' _initialize_soup '''
+        return BeautifulSoup(self.pageContent, 'html.parser')
+
+    def _initialize_socket(self):
+        ''' _initialize_socket '''
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((self.host, self.PORT))
+        return sock
+
+    def send_data_to_logstash(self):
+        ''' send_data_to_logstash '''
+        count = 0
+        consoleDataList = self.soup.get_text()
+        data = consoleDataList.split("\\n")
+        for line in data:
+            sock = self._initialize_socket()
+            try:
+                sock.send(b'{LINE}'.format(LINE=line))
+                count += 1
+            except UnicodeEncodeError as e:
+                pass
+            finally:
+                sock.close()
+        print 'Done, send %d lines' % count
+
+if __name__ == '__main__':
+    c = ConsoleLogBase()
+    c.send_data_to_logstash()
+"""
+
+pipeline {
+    agent none
+
+    options {
+        timestamps()
+    }
+
+    stages {
+        stage('test script') {
+            agent { label 'tractor_burnin' }
+
+            steps {
+
+                withEnv(['nodelabel=tractor_burnin',
+                        'PIPELINE_BRANCH=tractor_toxtest',
+                ]) {
+                    ansiColor('xterm') {
+                        echo "nodelabel: ${nodelabel}"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:17,118 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.raw.serialcommunication.BootState object at 0x1620B690> to <class 'gsixserialcomm.raw.serialcommunication.LoginState'>"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:17,118 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.raw.serialcommunication.LoginState object at 0x1627B2F0>"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:18,155 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.raw.serialcommunication.LoginState object at 0x1627B2F0> to <class 'gsixserialcomm.raw.serialcommunication.PasswordState'>"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:18,155 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.raw.serialcommunication.PasswordState object at 0x1627BD70>"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:22,247 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.raw.serialcommunication.PasswordState object at 0x1627BD70> to <class 'gsixserialcomm.raw.serialcommunication.CommandPromptState'>"
+                        echo "18:25:23 [tractor_smoke_intake.py] 2018-10-25 18:25:22,247 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.raw.serialcommunication.CommandPromptState object at 0x1627B3F0>"
+                        echo "18:25:24 [tractor_smoke_intake.py] 2018-10-25 18:25:24,476 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.waitfordisplay.CommandPromptState object at 0x045DFC90> to <class 'gsixserialcomm.waitfordisplay.JDDisplayBinaryPresentState'>"
+                        echo "18:25:24 [tractor_smoke_intake.py] 2018-10-25 18:25:24,476 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.waitfordisplay.JDDisplayBinaryPresentState object at 0x162C5830>"
+                        echo "18:25:26 [tractor_smoke_intake.py] 2018-10-25 18:25:26,023 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.waitfordisplay.JDDisplayBinaryPresentState object at 0x162C5830> to <class 'gsixserialcomm.waitfordisplay.JDDisplayProcessRunningState'>"
+                        echo "18:25:26 [tractor_smoke_intake.py] 2018-10-25 18:25:26,023 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.waitfordisplay.JDDisplayProcessRunningState object at 0x162C5AB0>"
+                        echo "18:25:27 [tractor_smoke_intake.py] 2018-10-25 18:25:27,565 - INFO - testexec.executeengine::set_state - Changing state from <gsixserialcomm.waitfordisplay.JDDisplayProcessRunningState object at 0x162C5AB0> to <class 'gsixserialcomm.waitfordisplay.GetEventLogNameState'>"
+                        echo "18:25:27 [tractor_smoke_intake.py] 2018-10-25 18:25:27,566 - INFO - testexec.executeengine::set_state - State now is <gsixserialcomm.waitfordisplay.GetEventLogNameState object at 0x162C5270>"
+                    }
+                }
+
+                writeFile file: "${WORKSPACE}\\executeScript.py", text: "${executeScript}"
+                bat 'python executeScript.py'
+            }
+
+            post {
+                always {
+                    archiveArtifacts allowEmptyArchive: true, artifacts: '**/*.xml, **/*.tgz, **/*.log'
+                }
+            }
+        }
+    }
+}
